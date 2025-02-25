@@ -10,7 +10,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct NewAccount {
+pub struct LoginInfo {
     pub username: String,
     pub password: String,
 }

@@ -2,16 +2,23 @@ use actix_web::{
     web::{self},
     App, HttpResponse, HttpServer, Responder,
 };
+use config::db;
 use dotenvy::dotenv;
 use env_logger::Env;
-use handlers::index;
 use log::info;
 use sqlx::migrate;
 
-mod db;
+mod config;
 mod error;
 mod handlers;
 mod model;
+mod repository;
+mod service;
+mod utils;
+
+pub async fn index() -> impl Responder {
+    HttpResponse::Ok().body("Welcome!")
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -37,7 +44,10 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .service(
                         web::scope("/auth")
-                            .route("/register", web::post().to(handlers::register))
+                            .route(
+                                "/register",
+                                web::post().to(handlers::auth_handler::register),
+                            )
                             .route("/login", web::post().to(index))
                             .route("/me", web::get().to(index))
                             .route("/refresh", web::post().to(index))
