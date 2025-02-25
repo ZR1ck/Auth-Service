@@ -1,15 +1,17 @@
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    web::{self},
+    App, HttpResponse, HttpServer, Responder,
+};
 use dotenvy::dotenv;
 use env_logger::Env;
-use log::{error, info};
+use handlers::index;
+use log::info;
 use sqlx::migrate;
 
 mod db;
+mod error;
+mod handlers;
 mod model;
-
-async fn index() -> impl Responder {
-    HttpResponse::Ok().body("Welcome!")
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -27,9 +29,31 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting server...");
 
-    HttpServer::new(|| App::new().route("/", web::get().to(index)))
-        .workers(1)
-        .bind(("localhost", 8080))?
-        .run()
-        .await
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(pool.clone()))
+            .route("/", web::get().to(index))
+            .service(
+                web::scope("/api")
+                    .service(
+                        web::scope("/auth")
+                            .route("/register", web::post().to(handlers::register))
+                            .route("/login", web::post().to(index))
+                            .route("/me", web::get().to(index))
+                            .route("/refresh", web::post().to(index))
+                            .route("/logout", web::post().to(index))
+                            .route("/check-token", web::post().to(index)),
+                    )
+                    .service(
+                        web::scope("/admin/users")
+                            .route("/", web::get().to(index))
+                            .route("/{user_id}/role", web::put().to(index))
+                            .route("/{users_id}/", web::delete().to(index)),
+                    ),
+            )
+    })
+    .workers(1)
+    .bind(("localhost", 8080))?
+    .run()
+    .await
 }
