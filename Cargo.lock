@@ -347,6 +347,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "jsonwebtoken",
+ "lazy_static",
  "log",
  "redis 0.29.0",
  "serde",

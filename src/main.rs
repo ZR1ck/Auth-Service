@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use actix_web::{
     web::{self},
     App, HttpResponse, HttpServer, Responder,
@@ -6,7 +8,8 @@ use config::{db, redis};
 use dotenvy::dotenv;
 use env_logger::Env;
 use log::info;
-use repository::redis_repo;
+use repository::{account_repo::AccountRepo, redis_repo::RedisRepo};
+use service::auth_service::AuthService;
 use sqlx::migrate;
 
 mod config;
@@ -15,11 +18,14 @@ mod handlers;
 mod model;
 mod repository;
 mod service;
+mod traits;
 mod utils;
 
 pub async fn index() -> impl Responder {
     HttpResponse::Ok().body("Welcome!")
 }
+
+type AppAuthService = AuthService<AccountRepo, RedisRepo>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -40,10 +46,17 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting server...");
 
+    let account_repo = repository::account_repo::AccountRepo::new(posgres_pool);
+    let redis_repo = repository::redis_repo::RedisRepo::new(redis_pool);
+
+    let auth_service = Arc::new(service::auth_service::AuthService::new(
+        account_repo,
+        redis_repo,
+    ));
+
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(posgres_pool.clone()))
-            .app_data(web::Data::new(redis_pool.clone()))
+            .app_data(web::Data::from(auth_service.clone()))
             .route("/", web::get().to(index))
             .service(
                 web::scope("/api")

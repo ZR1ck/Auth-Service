@@ -1,1 +1,0 @@
-SELECT id, username, NULL AS password, role FROM account WHERE username = $1 LIMIT 1;

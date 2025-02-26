@@ -3,18 +3,22 @@ use argon2::{
     Argon2, PasswordHash,
 };
 
-pub fn hash_password(password: &str) -> Result<String, password_hash::errors::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
+pub struct Hasher {}
 
-    let hash_pw = argon2
-        .hash_password(password.as_bytes(), &salt)?
-        .to_string();
+impl Hasher {
+    pub fn hash_password(password: &str) -> Result<String, password_hash::errors::Error> {
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
 
-    Ok(hash_pw)
-}
+        let hash_pw = argon2
+            .hash_password(password.as_bytes(), &salt)?
+            .to_string();
 
-pub fn verify_password(password: &str, hash: &str) -> Result<(), password_hash::errors::Error> {
-    let parsed_hash = PasswordHash::new(&hash)?;
-    Argon2::default().verify_password(password.as_bytes(), &parsed_hash)
+        Ok(hash_pw)
+    }
+
+    pub fn verify_password(password: &str, hash: &str) -> Result<(), password_hash::errors::Error> {
+        let parsed_hash = PasswordHash::new(&hash)?;
+        Argon2::default().verify_password(password.as_bytes(), &parsed_hash)
+    }
 }
