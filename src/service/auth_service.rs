@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use log::error;
 
 use crate::{
@@ -5,17 +7,17 @@ use crate::{
         account::{Account, LoginInfo},
         token::Token,
     },
-    traits::{account_trait::AuthRepository, redis_traits::RedisRepository},
+    traits::{account_trait::AuthRepository, redis_traits::TokenRedisRepository},
     utils,
 };
 
-pub struct AuthService<R: AuthRepository, T: RedisRepository> {
-    pg_repo: R,
-    redis_repo: T,
+pub struct AuthService<R: AuthRepository, T: TokenRedisRepository> {
+    pg_repo: Arc<R>,
+    redis_repo: Arc<T>,
 }
 
-impl<R: AuthRepository, T: RedisRepository> AuthService<R, T> {
-    pub fn new(pg_repo: R, redis_repo: T) -> Self {
+impl<R: AuthRepository, T: TokenRedisRepository> AuthService<R, T> {
+    pub fn new(pg_repo: Arc<R>, redis_repo: Arc<T>) -> Self {
         Self {
             pg_repo,
             redis_repo,
@@ -33,8 +35,11 @@ impl<R: AuthRepository, T: RedisRepository> AuthService<R, T> {
             return Err(actix_web::error::ErrorConflict("Username existed"));
         }
 
-        let password_hash = utils::password::Hasher::hash_password(&login_info.password)
-            .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+        let password_hash =
+            utils::password::Hasher::hash_password(&login_info.password).map_err(|e| {
+                error!("Hashing error: {}", e);
+                actix_web::error::ErrorInternalServerError(e)
+            })?;
 
         self.pg_repo
             .insert_account(login_info.username, password_hash)
@@ -56,7 +61,8 @@ impl<R: AuthRepository, T: RedisRepository> AuthService<R, T> {
         {
             Ok(auth_info) => auth_info,
             Err(sqlx::Error::RowNotFound) => {
-                return Err(actix_web::error::ErrorNotFound("Not found"))
+                error!("Row not found");
+                return Err(actix_web::error::ErrorNotFound("Not found"));
             }
             Err(e) => return Err(actix_web::error::ErrorInternalServerError(e)),
         };
@@ -71,21 +77,28 @@ impl<R: AuthRepository, T: RedisRepository> AuthService<R, T> {
         })
         .is_ok()
         {
-            let access_token =
-                utils::jwt::Jwt::generate_access_token(&auth_info.id.to_string(), &auth_info.role)
-                    .unwrap();
-            let refresh_token =
-                utils::jwt::Jwt::generate_refresh_token(&auth_info.id.to_string(), &auth_info.role)
-                    .unwrap();
+            let access_token = utils::jwt::JwtUtils::generate_access_token(
+                &auth_info.id.to_string(),
+                &auth_info.role,
+            )
+            .unwrap();
+            let refresh_token = utils::jwt::JwtUtils::generate_refresh_token(
+                &auth_info.id.to_string(),
+                &auth_info.role,
+            )
+            .unwrap();
 
             self.redis_repo
                 .store_refresh_token(
                     &auth_info.id.to_string(),
                     &refresh_token,
-                    utils::jwt::Jwt::get_refresh_exp().num_minutes(),
+                    utils::jwt::JwtUtils::get_refresh_exp(),
                 )
                 .await
-                .unwrap();
+                .map_err(|e| {
+                    error!("Redis error: {}", e);
+                    actix_web::error::ErrorInternalServerError(e)
+                })?;
 
             return Ok(Token {
                 access_token,

@@ -1,6 +1,6 @@
 use crate::error::redis_error::RedisError;
 
-pub trait RedisRepository: Send + Sync {
+pub trait TokenRedisRepository: Send + Sync {
     async fn store_refresh_token(
         &self,
         user_id: &str,

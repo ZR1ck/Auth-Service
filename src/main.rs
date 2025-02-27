@@ -8,13 +8,15 @@ use config::{db, redis};
 use dotenvy::dotenv;
 use env_logger::Env;
 use log::info;
-use repository::{account_repo::AccountRepo, redis_repo::RedisRepo};
+use middleware::auth_middleware::{self};
+use repository::{account_repo::AccountRepo, token_redis_repo::TokenRedisRepo};
 use service::auth_service::AuthService;
 use sqlx::migrate;
 
 mod config;
 mod error;
 mod handlers;
+mod middleware;
 mod model;
 mod repository;
 mod service;
@@ -25,7 +27,7 @@ pub async fn index() -> impl Responder {
     HttpResponse::Ok().body("Welcome!")
 }
 
-type AppAuthService = AuthService<AccountRepo, RedisRepo>;
+type AppAuthService = AuthService<AccountRepo, TokenRedisRepo>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -46,12 +48,18 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting server...");
 
-    let account_repo = repository::account_repo::AccountRepo::new(posgres_pool);
-    let redis_repo = repository::redis_repo::RedisRepo::new(redis_pool);
+    let account_repo = Arc::new(repository::account_repo::AccountRepo::new(posgres_pool));
+    let token_redis_repo = Arc::new(repository::token_redis_repo::TokenRedisRepo::new(
+        redis_pool,
+    ));
 
     let auth_service = Arc::new(service::auth_service::AuthService::new(
-        account_repo,
-        redis_repo,
+        account_repo.clone(),
+        token_redis_repo.clone(),
+    ));
+
+    let auth_middleware = Arc::new(auth_middleware::AuthMiddleware::new(
+        token_redis_repo.clone(),
     ));
 
     HttpServer::new(move || {
@@ -67,13 +75,14 @@ async fn main() -> std::io::Result<()> {
                                 web::post().to(handlers::auth_handler::register),
                             )
                             .route("/login", web::post().to(handlers::auth_handler::login))
-                            .route("/me", web::get().to(index))
                             .route("/refresh", web::post().to(index))
-                            .route("/logout", web::post().to(index))
-                            .route("/check-token", web::post().to(index)),
+                            .route("/check-token", web::post().to(index))
+                            .route("/me", web::get().to(index))
+                            .route("/logout", web::post().to(index)),
                     )
                     .service(
                         web::scope("/admin/users")
+                            .wrap(auth_middleware.clone())
                             .route("/", web::get().to(index))
                             .route("/{user_id}/role", web::put().to(index))
                             .route("/{users_id}/", web::delete().to(index)),

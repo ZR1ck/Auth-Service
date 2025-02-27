@@ -28,9 +28,6 @@ pub async fn login(
 ) -> impl Responder {
     match auth_service.verify_account(login_info.0).await {
         Ok(result) => HttpResponse::Ok().json(result),
-        Err(e) => {
-            error!("{}", e);
-            HttpResponse::from_error(e)
-        }
+        Err(e) => HttpResponse::from_error(e),
     }
 }

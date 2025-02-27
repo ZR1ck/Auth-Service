@@ -1,19 +1,19 @@
 use deadpool_redis::{redis::cmd, Pool};
 use log::error;
 
-use crate::{error::redis_error::RedisError, traits::redis_traits::RedisRepository};
+use crate::{error::redis_error::RedisError, traits::redis_traits::TokenRedisRepository};
 
-pub struct RedisRepo {
+pub struct TokenRedisRepo {
     pool: Pool,
 }
 
-impl RedisRepo {
+impl TokenRedisRepo {
     pub fn new(pool: Pool) -> Self {
         Self { pool }
     }
 }
 
-impl RedisRepository for RedisRepo {
+impl TokenRedisRepository for TokenRedisRepo {
     async fn store_refresh_token(
         &self,
         user_id: &str,
