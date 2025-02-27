@@ -10,7 +10,7 @@ use env_logger::Env;
 use log::info;
 use middleware::auth_middleware::{self};
 use repository::{account_repo::AccountRepo, token_redis_repo::TokenRedisRepo};
-use service::auth_service::AuthService;
+use service::{account_service::AccountService, auth_service::AuthService};
 use sqlx::migrate;
 
 mod config;
@@ -28,6 +28,7 @@ pub async fn index() -> impl Responder {
 }
 
 type AppAuthService = AuthService<AccountRepo, TokenRedisRepo>;
+type AppAccountService = AccountService<AccountRepo>;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -49,14 +50,14 @@ async fn main() -> std::io::Result<()> {
     info!("Starting server...");
 
     let account_repo = Arc::new(AccountRepo::new(posgres_pool));
-    let token_redis_repo = Arc::new(TokenRedisRepo::new(
-        redis_pool,
-    ));
+    let token_redis_repo = Arc::new(TokenRedisRepo::new(redis_pool));
 
     let auth_service = Arc::new(AuthService::new(
         account_repo.clone(),
         token_redis_repo.clone(),
     ));
+
+    let account_service = Arc::new(AccountService::new(account_repo.clone()));
 
     let auth_middleware = Arc::new(auth_middleware::AuthMiddleware::new(
         token_redis_repo.clone(),
@@ -65,6 +66,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::from(auth_service.clone()))
+            .app_data(web::Data::from(account_service.clone()))
             .route("/", web::get().to(index))
             .service(
                 web::scope("/api")
@@ -83,7 +85,7 @@ async fn main() -> std::io::Result<()> {
                                         web::post().to(handlers::auth_handler::refresh),
                                     )
                                     .route("/ping", web::get().to(index))
-                                    .route("/me", web::get().to(index))
+                                    .route("/me", web::get().to(handlers::account_handler::me))
                                     .route("/logout", web::post().to(index)),
                             ),
                     )

@@ -7,20 +7,20 @@ use crate::{
         account::{Account, LoginInfo},
         token::Token,
     },
-    traits::{account_trait::AuthRepository, redis_traits::TokenRedisRepository},
+    traits::{account_trait::AccountRepository, redis_traits::TokenRedisRepository},
     utils,
 };
 
 /// Service responsible for handling user authentication and account management.
 /// It interacts with both the PostgreSQL repository (for account data) and the Redis repository (for refresh token storage).
-pub struct AuthService<R: AuthRepository, T: TokenRedisRepository> {
+pub struct AuthService<R: AccountRepository, T: TokenRedisRepository> {
     /// Repository for PostgreSQL operations related to user accounts.
     pg_repo: Arc<R>,
     /// Repository for Redis operations related to refresh token storage.
     redis_repo: Arc<T>,
 }
 
-impl<R: AuthRepository, T: TokenRedisRepository> AuthService<R, T> {
+impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
     /// Creates a new instance of `AuthService`.
     ///
     /// # Arguments
@@ -95,7 +95,7 @@ impl<R: AuthRepository, T: TokenRedisRepository> AuthService<R, T> {
         // Fetch authentication information from the database.
         let auth_info: Account = match self
             .pg_repo
-            .get_auth_info_by_username(&login_info.username)
+            .get_account_by_username(&login_info.username)
             .await
         {
             Ok(auth_info) => auth_info,

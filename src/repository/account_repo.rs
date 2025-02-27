@@ -1,8 +1,8 @@
 use sqlx::{Pool, Postgres};
 
-use crate::{model::account::Account, traits::account_trait::AuthRepository};
+use crate::{model::account::Account, traits::account_trait::AccountRepository};
 
-/// `AccountRepo` provides an implementation of `AuthRepository` for PostgreSQL.
+/// `AccountRepo` provides an implementation of `AccountRepository` for PostgreSQL.
 /// It handles basic account-related operations such as inserting a new account,
 /// fetching account informations by values, and checking if an account exists.
 pub struct AccountRepo {
@@ -25,7 +25,7 @@ impl AccountRepo {
     }
 }
 
-impl AuthRepository for AccountRepo {
+impl AccountRepository for AccountRepo {
     /// Inserts a new account into the database.
     ///
     /// # Arguments
@@ -63,7 +63,7 @@ impl AuthRepository for AccountRepo {
     ///
     /// * `Ok(Account)` - The account information if found.
     /// * `Err(sqlx::Error)` - Returns `RowNotFound` if no account exists with this username, or other SQLx errors.
-    async fn get_auth_info_by_username(&self, username: &str) -> Result<Account, sqlx::Error> {
+    async fn get_account_by_username(&self, username: &str) -> Result<Account, sqlx::Error> {
         // Load SQL query from external file.
         let select_stmt = include_str!("../../sql/get_auth_info.sql");
 
@@ -103,6 +103,30 @@ impl AuthRepository for AccountRepo {
         // If found, return Ok, otherwise return RowNotFound.
         match account {
             Some(_) => Ok(()),
+            None => Err(sqlx::Error::RowNotFound),
+        }
+    }
+
+    /// Retrieve account information by id
+    ///
+    /// # Arguments
+    ///
+    /// * 'id' - The id to search for
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Account)` - The account information if found.
+    /// * `Err(sqlx::Error)` - Returns `RowNotFound` if no account exists with this username, or other SQLx errors.
+    async fn get_account_by_id(&self, id: i32) -> Result<Account, sqlx::Error> {
+        let stmt = include_str!("../../sql/get_account_by_id.sql");
+
+        let account: Option<Account> = sqlx::query_as(stmt)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        match account {
+            Some(account) => Ok(account),
             None => Err(sqlx::Error::RowNotFound),
         }
     }

@@ -1,0 +1,1 @@
+SELECT id, username, NULL AS password, role FROM account WHERE id = $1;
