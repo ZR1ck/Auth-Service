@@ -15,7 +15,7 @@ pub async fn register(
     match auth_service.add_account(login_info.0).await {
         Ok(result) => {
             info!("{} rows inserted", result);
-            HttpResponse::Ok().body(format!("Success"))
+            HttpResponse::Ok().body("Success".to_string())
         }
         Err(e) => HttpResponse::from_error(e),
     }

@@ -48,12 +48,12 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting server...");
 
-    let account_repo = Arc::new(repository::account_repo::AccountRepo::new(posgres_pool));
-    let token_redis_repo = Arc::new(repository::token_redis_repo::TokenRedisRepo::new(
+    let account_repo = Arc::new(AccountRepo::new(posgres_pool));
+    let token_redis_repo = Arc::new(TokenRedisRepo::new(
         redis_pool,
     ));
 
-    let auth_service = Arc::new(service::auth_service::AuthService::new(
+    let auth_service = Arc::new(AuthService::new(
         account_repo.clone(),
         token_redis_repo.clone(),
     ));
