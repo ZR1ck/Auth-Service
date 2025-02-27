@@ -2,12 +2,11 @@ use std::{future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 
 use actix_web::{
     body::{BoxBody, MessageBody},
-    cookie::Cookie,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage, HttpResponse,
 };
 use futures_util::future::{ok, Ready};
-use log::info;
+use log::{error, info};
 
 use crate::{service::token_service::TokenService, traits::redis_traits::TokenRedisRepository};
 
@@ -71,59 +70,44 @@ where
         let token_service = self.token_service.clone();
 
         Box::pin(async move {
-            let access_token = req
-                .headers()
-                .get("Authorization")
-                .and_then(|hv| hv.to_str().ok())
-                .map(|s| s.trim_start_matches("Bearer "));
+            let path = req.path();
+            if path.contains("/api/auth/refresh") {
+                if let Some(cookie) = req.cookie("refresh_token") {
+                    let refresh_token = cookie.value().to_string();
+                    match token_service.verify_refresh_token(&refresh_token).await {
+                        Ok(new_access_token) => {
+                            info!("Refresh token verified");
+                            req.extensions_mut().insert(new_access_token);
 
-            if let Some(token) = access_token {
-                match token_service.verify_access_token(token) {
-                    Ok(claims) => {
-                        info!("Access token verified");
-                        req.extensions_mut().insert(claims.id.clone());
-
-                        let res = srv.call(req).await?;
-                        return Ok(res.map_into_boxed_body());
-                    }
-                    Err(_) => {
-                        info!("Access token denied");
-                        if let Some(refresh_token) = req
-                            .headers()
-                            .get("Refresh-token")
-                            .and_then(|hv| hv.to_str().ok())
-                        {
-                            match token_service.verify_refresh_token(refresh_token).await {
-                                Ok(new_access_token) => {
-                                    info!("Refresh token verified");
-                                    let mut res = srv.call(req).await?.map_into_boxed_body();
-
-                                    let access_token_cockie =
-                                        Cookie::build("access_token", new_access_token)
-                                            .path("/")
-                                            .http_only(true)
-                                            .secure(true)
-                                            .finish();
-                                    let res_header = res.headers_mut();
-                                    res_header.append(
-                                        actix_web::http::header::SET_COOKIE,
-                                        access_token_cockie.to_string().parse().unwrap(),
-                                    );
-
-                                    return Ok(res);
-                                }
-                                Err(_) => {
-                                    info!("Refresh token denied");
-                                    return Ok(
-                                        req.into_response(HttpResponse::Unauthorized().finish())
-                                    );
-                                }
-                            }
+                            let res = srv.call(req).await?;
+                            return Ok(res.map_into_boxed_body());
                         }
+                        Err(_) => {}
                     }
                 }
-            }
+            } else {
+                let access_token = req
+                    .headers()
+                    .get("Authorization")
+                    .and_then(|hv| hv.to_str().ok())
+                    .map(|s| s.trim_start_matches("Bearer "));
 
+                if let Some(token) = access_token {
+                    match token_service.verify_access_token(token) {
+                        Ok(claims) => {
+                            info!("Access token verified");
+                            req.extensions_mut().insert(claims);
+
+                            let res = srv.call(req).await?;
+                            return Ok(res.map_into_boxed_body());
+                        }
+                        Err(e) => {
+                            error!("Access token error: {}", e);
+                            return Ok(req.into_response(HttpResponse::Unauthorized().finish()));
+                        }
+                    }
+                };
+            }
             Ok(req.into_response(HttpResponse::Unauthorized().finish()))
         })
     }

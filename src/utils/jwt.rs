@@ -14,7 +14,7 @@ pub struct Claims {
 }
 
 lazy_static! {
-    pub static ref ACCESS_TOKEN_EXPIRY: Duration = Duration::seconds(5);
+    pub static ref ACCESS_TOKEN_EXPIRY: Duration = Duration::seconds(20);
     pub static ref REFRESH_TOKEN_EXPIRY: Duration = Duration::minutes(1);
 }
 

@@ -75,10 +75,17 @@ async fn main() -> std::io::Result<()> {
                                 web::post().to(handlers::auth_handler::register),
                             )
                             .route("/login", web::post().to(handlers::auth_handler::login))
-                            .route("/refresh", web::post().to(index))
-                            .route("/check-token", web::post().to(index))
-                            .route("/me", web::get().to(index))
-                            .route("/logout", web::post().to(index)),
+                            .service(
+                                web::scope("")
+                                    .wrap(auth_middleware.clone())
+                                    .route(
+                                        "/refresh",
+                                        web::post().to(handlers::auth_handler::refresh),
+                                    )
+                                    .route("/ping", web::get().to(index))
+                                    .route("/me", web::get().to(index))
+                                    .route("/logout", web::post().to(index)),
+                            ),
                     )
                     .service(
                         web::scope("/admin/users")
