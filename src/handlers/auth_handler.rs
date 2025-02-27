@@ -6,7 +6,10 @@ use actix_web::{
 use log::info;
 use serde_json::json;
 
-use crate::{model::account::LoginInfo, AppAuthService};
+use crate::{
+    model::{account::LoginInfo, token::RefreshToken},
+    AppAuthService,
+};
 
 pub async fn register(
     auth_service: web::Data<AppAuthService>,
@@ -45,4 +48,14 @@ pub async fn refresh(req: HttpRequest) -> impl Responder {
         None => return HttpResponse::Unauthorized().body("Some thing wrong"),
     };
     HttpResponse::Ok().json(json!({"access_token": access_token}))
+}
+
+pub async fn logout(
+    auth_service: web::Data<AppAuthService>,
+    refresh_token: Json<RefreshToken>,
+) -> impl Responder {
+    match auth_service.logout(&refresh_token.refresh_token).await {
+        Ok(()) => HttpResponse::Ok().body("Logout success"),
+        Err(e) => HttpResponse::from_error(e),
+    }
 }

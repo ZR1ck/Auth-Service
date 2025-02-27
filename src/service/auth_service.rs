@@ -155,4 +155,21 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
             "Cannot verify account",
         ))
     }
+
+    /// Remove refresh token in Redis
+    ///
+    /// # Arguments
+    ///
+    /// * `refresh_token` - The token to remove
+    ///
+    /// # Returns
+    ///
+    /// *`Ok(())` - If remove success
+    /// *`Err(actix_web::error::Error)` - Actix error if the account is not found or the credentials are invalid.
+    pub async fn logout(&self, refresh_token: &str) -> Result<(), actix_web::error::Error> {
+        self.redis_repo
+            .delete_refresh_token(refresh_token)
+            .await
+            .map_err(|e| actix_web::error::ErrorInternalServerError(e))
+    }
 }

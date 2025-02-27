@@ -86,7 +86,10 @@ async fn main() -> std::io::Result<()> {
                                     )
                                     .route("/ping", web::get().to(index))
                                     .route("/me", web::get().to(handlers::account_handler::me))
-                                    .route("/logout", web::post().to(index)),
+                                    .route(
+                                        "/logout",
+                                        web::post().to(handlers::auth_handler::logout),
+                                    ),
                             ),
                     )
                     .service(

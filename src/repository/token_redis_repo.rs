@@ -1,5 +1,5 @@
 use deadpool_redis::{redis::cmd, Pool};
-use log::error;
+use log::{error, info};
 
 use crate::{error::redis_error::RedisError, traits::redis_traits::TokenRedisRepository};
 
@@ -115,6 +115,7 @@ impl TokenRedisRepository for TokenRedisRepo {
             .await
             .map_err(|_| RedisError::RedisError)?;
 
+        info!("Refresh token deleted");
         Ok(())
     }
 }
