@@ -8,7 +8,10 @@ use config::{db, redis};
 use dotenvy::dotenv;
 use env_logger::Env;
 use log::info;
-use middleware::auth_middleware::{self};
+use middleware::{
+    auth_middleware::{self},
+    rbac_middleware::RbacMiddleware,
+};
 use repository::{account_repo::AccountRepo, token_redis_repo::TokenRedisRepo};
 use service::{account_service::AccountService, auth_service::AuthService};
 use sqlx::migrate;
@@ -94,10 +97,9 @@ async fn main() -> std::io::Result<()> {
                     )
                     .service(
                         web::scope("/admin/users")
+                            .wrap(RbacMiddleware)
                             .wrap(auth_middleware.clone())
-                            .route("/", web::get().to(index))
-                            .route("/{user_id}/role", web::put().to(index))
-                            .route("/{users_id}/", web::delete().to(index)),
+                            .route("/", web::get().to(index)),
                     ),
             )
     })

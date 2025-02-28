@@ -28,16 +28,20 @@ pub async fn login(
     auth_service: web::Data<AppAuthService>,
     login_info: Json<LoginInfo>,
 ) -> impl Responder {
+    let u = login_info.username.clone();
     match auth_service.verify_account(login_info.0).await {
-        Ok(result) => HttpResponse::Ok()
-            .insert_header((
-                header::SET_COOKIE,
-                format!(
-                    "refresh_token={};Path=/; HttpOnly; Secure; SameSite=Strict",
-                    result.refresh_token
-                ),
-            ))
-            .json(result),
+        Ok(result) => {
+            info!("User {u} logged in");
+            HttpResponse::Ok()
+                .insert_header((
+                    header::SET_COOKIE,
+                    format!(
+                        "refresh_token={};Path=/; HttpOnly; Secure; SameSite=Strict",
+                        result.refresh_token
+                    ),
+                ))
+                .json(result)
+        }
         Err(e) => HttpResponse::from_error(e),
     }
 }

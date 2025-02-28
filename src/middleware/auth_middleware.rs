@@ -96,11 +96,13 @@ where
         let srv = self.service.clone();
         let token_service = self.token_service.clone();
 
+        info!("AuthMiddleware called");
+
         Box::pin(async move {
             let path = req.path();
 
             // Special handling for refresh token endpoint
-            if path.contains("/api/auth/refresh") {
+            if path.ends_with("/api/auth/refresh") {
                 if let Some(cookie) = req.cookie("refresh_token") {
                     let refresh_token = cookie.value().to_string();
                     match token_service.verify_refresh_token(&refresh_token).await {
