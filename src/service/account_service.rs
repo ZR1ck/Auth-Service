@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use log::error;
 
-use crate::{model::account::Account, traits::account_trait::AccountRepository};
+use crate::{
+    error::service_error::ServiceError, model::account::Account,
+    traits::account_trait::AccountRepository,
+};
 
 /// Service responsible for handling account-related operations.
 /// This service interacts with an `AccountRepository`
@@ -34,13 +37,13 @@ impl<T: AccountRepository> AccountService<T> {
     /// # Returns
     ///
     /// * `Ok(Account)` - The account information if found.
-    /// * `Err(actix_web::error::Error)` - An Actix Web error if the ID conversion fails,
+    /// * `Err(ServiceError)` - An Actix Web error if the ID conversion fails,
     ///   the account is not found, or a database error occurs.
-    pub async fn get_account_info(&self, id: &str) -> Result<Account, actix_web::error::Error> {
+    pub async fn get_account_info(&self, id: &str) -> Result<Account, ServiceError> {
         // Parse the provided string ID into an i32.
         let id = id
             .parse::<i32>()
-            .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+            .map_err(|e| ServiceError::InvalidIdFormat(e))?;
 
         // Query the repository for the account information.
         let account = self.account_repo.get_account_by_id(id).await;
@@ -51,12 +54,12 @@ impl<T: AccountRepository> AccountService<T> {
             Err(sqlx::Error::RowNotFound) => {
                 // Log and return a 404 Not Found error if account does not exist.
                 error!("Account not found");
-                Err(actix_web::error::ErrorNotFound("Account not found"))
+                Err(ServiceError::NotFound)
             }
             Err(e) => {
                 // Log and return a 500 Internal Server Error for other unexpected errors.
                 error!("{}", e);
-                Err(actix_web::error::ErrorInternalServerError(e))
+                Err(ServiceError::DatabaseError(e))
             }
         }
     }

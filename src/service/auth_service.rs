@@ -3,6 +3,7 @@ use std::sync::Arc;
 use log::error;
 
 use crate::{
+    error::service_error::ServiceError,
     model::{
         account::{Account, LoginInfo},
         token::Token,
@@ -87,11 +88,8 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
     /// # Returns
     ///
     /// * `Ok(Token)` - Struct containing the generated access and refresh tokens.
-    /// * `Err(actix_web::error::Error)` - Actix error if the account is not found or the credentials are invalid.
-    pub async fn verify_account(
-        &self,
-        login_info: LoginInfo,
-    ) -> Result<Token, actix_web::error::Error> {
+    /// * `Err(ServiceError)` - Actix error if the account is not found or the credentials are invalid.
+    pub async fn verify_account(&self, login_info: LoginInfo) -> Result<Token, ServiceError> {
         // Fetch authentication information from the database.
         let auth_info: Account = match self
             .pg_repo
@@ -101,9 +99,9 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
             Ok(auth_info) => auth_info,
             Err(sqlx::Error::RowNotFound) => {
                 error!("Row not found");
-                return Err(actix_web::error::ErrorNotFound("Not found"));
+                return Err(ServiceError::NotFound);
             }
-            Err(e) => return Err(actix_web::error::ErrorInternalServerError(e)),
+            Err(e) => return Err(ServiceError::DatabaseError(e)),
         };
 
         // Verify the provided password against the stored hash.
@@ -111,10 +109,6 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
             &login_info.password,
             &auth_info.password.unwrap(), // Assume password is always Some.
         )
-        .map_err(|e| {
-            error!("Password verifying error: {}", e);
-            actix_web::error::ErrorUnauthorized(e)
-        })
         .is_ok()
         {
             // Generate new access and refresh tokens upon successful verification.
@@ -122,13 +116,13 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
                 &auth_info.id.to_string(),
                 &auth_info.role,
             )
-            .unwrap();
+            .map_err(|e| ServiceError::JwtError(e))?;
 
             let refresh_token = utils::jwt::JwtUtils::generate_refresh_token(
                 &auth_info.id.to_string(),
                 &auth_info.role,
             )
-            .unwrap();
+            .map_err(|e| ServiceError::JwtError(e))?;
 
             // Store the refresh token in Redis with an appropriate expiration time.
             self.redis_repo
@@ -140,7 +134,7 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
                 .await
                 .map_err(|e| {
                     error!("Redis error: {}", e);
-                    actix_web::error::ErrorInternalServerError(e)
+                    ServiceError::RedisError
                 })?;
 
             // Return the generated tokens.
@@ -151,9 +145,7 @@ impl<R: AccountRepository, T: TokenRedisRepository> AuthService<R, T> {
         }
 
         // Return an error if password verification fails.
-        Err(actix_web::error::ErrorInternalServerError(
-            "Cannot verify account",
-        ))
+        Err(ServiceError::UnAuthorizedError)
     }
 
     /// Remove refresh token in Redis

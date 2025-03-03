@@ -8,6 +8,7 @@ use jsonwebtoken::{DecodingKey, Validation};
 use log::{error, info};
 
 use crate::{
+    error::service_error::ServiceError,
     traits::redis_traits::TokenRedisRepository,
     utils::jwt::{self, Claims},
 };
@@ -46,11 +47,8 @@ impl<T: TokenRedisRepository> TokenService<T> {
     /// # Returns
     ///
     /// * `Ok(String)` - The newly generated access token.
-    /// * `Err(actix_web::error::Error)` - An Actix web error if validation fails.
-    pub async fn verify_refresh_token(
-        &self,
-        token: &str,
-    ) -> Result<String, actix_web::error::Error> {
+    /// * `Err(ServiceError)` - An Actix web error if validation fails.
+    pub async fn verify_refresh_token(&self, token: &str) -> Result<String, ServiceError> {
         // Load the refresh token secret key from environment variables.
         let secret_key = env::var("JWT_REFRESH_SECRET").expect("JWT_REFRESH_SECRET must be set");
 
@@ -62,13 +60,13 @@ impl<T: TokenRedisRepository> TokenService<T> {
             .map_err(|e| {
                 // Log any error that occurs during Redis operation.
                 error!("{}", e);
-                actix_web::error::ErrorInternalServerError(e)
+                ServiceError::RedisError
             })?;
 
         // If the token does not exist in Redis, reject it.
         if !is_valid {
             info!("Invalid refresh token");
-            return Err(actix_web::error::ErrorUnauthorized("Invalid refresh token"));
+            return Err(ServiceError::UnAuthorizedError);
         }
 
         // Decode and validate the token using the secret key.
@@ -77,13 +75,13 @@ impl<T: TokenRedisRepository> TokenService<T> {
             &DecodingKey::from_secret(secret_key.as_ref()),
             &Validation::default(),
         )
-        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?;
+        .map_err(|e| ServiceError::JwtError(e))?;
 
         let claims: Claims = token_data.claims;
 
         // Generate a new access token using the claims from the refresh token.
         jwt::JwtUtils::generate_access_token(&claims.id, &claims.role)
-            .map_err(|e| actix_web::error::ErrorInternalServerError(e))
+            .map_err(|e| ServiceError::JwtError(e))
     }
 
     /// Verifies an access token by:
@@ -97,8 +95,8 @@ impl<T: TokenRedisRepository> TokenService<T> {
     /// # Returns
     ///
     /// * `Ok(Claims)` - Decoded claims if the token is valid.
-    /// * `Err(actix_web::error::Error)` - An Actix web error if validation fails.
-    pub fn verify_access_token(&self, token: &str) -> Result<Claims, actix_web::error::Error> {
+    /// * `Err(ServiceError)` - An Actix web error if validation fails.
+    pub fn verify_access_token(&self, token: &str) -> Result<Claims, ServiceError> {
         // Load the access token secret key from environment variables.
         let secret_key = env::var("JWT_ACCESS_SECRET").expect("JWT_ACCESS_SECRET must be set");
 
@@ -108,7 +106,7 @@ impl<T: TokenRedisRepository> TokenService<T> {
             &DecodingKey::from_secret(secret_key.as_ref()),
             &Validation::default(),
         )
-        .map_err(|e| actix_web::error::ErrorInternalServerError(e))?
+        .map_err(|e| ServiceError::JwtError(e))?
         .claims;
 
         // Check the token's expiration time against the current time.
@@ -119,7 +117,7 @@ impl<T: TokenRedisRepository> TokenService<T> {
 
         if token_data.exp < now {
             info!("Expired access token");
-            return Err(actix_web::error::ErrorUnauthorized("Invalid access token"));
+            return Err(ServiceError::UnAuthorizedError);
         }
 
         // Return the valid token claims.
